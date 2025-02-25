@@ -142,6 +142,7 @@ static void usage(const char *argv0)
 #define OPT_LIST_KNOWN_MBUS_FMTS	259
 #define OPT_GET_DV			260
 #define OPT_VERSION			261
+#define OPT_PRINT_JSON			262
 
 static struct option opts[] = {
 	{"device", 1, 0, 'd'},
@@ -157,6 +158,7 @@ static struct option opts[] = {
 	{"links", 1, 0, 'l'},
 	{"known-mbus-fmts", 0, 0, OPT_LIST_KNOWN_MBUS_FMTS},
 	{"print-dot", 0, 0, OPT_PRINT_DOT},
+	{"print-json", 0, 0, OPT_PRINT_JSON},
 	{"print-topology", 0, 0, 'p'},
 	{"reset", 0, 0, 'r'},
 	{"verbose", 0, 0, 'v'},
@@ -285,6 +287,10 @@ int parse_cmdline(int argc, char **argv)
 
 		case OPT_PRINT_DOT:
 			media_opts.print_dot = 1;
+			break;
+
+		case OPT_PRINT_JSON:
+			media_opts.print_json = 1;
 			break;
 
 		case OPT_GET_FORMAT:

@@ -17,6 +17,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+ Added by Mikael Lövqvist:
+ 	json_* functions,
+ 	media_print_topology_json()
+ 	--json command line option
+
  */
 
 #include <sys/ioctl.h>
@@ -52,6 +58,42 @@ struct flag_name {
 	__u32 flag;
 	char *name;
 };
+
+static void json_start_dict() {
+	printf("{ ");
+}
+
+static void json_end_dict() {
+	printf(" }");
+}
+
+static void json_start_list() {
+	printf("[ ");
+}
+
+static void json_end_list() {
+	printf(" ]");
+}
+
+static void json_null() {
+	printf("null");
+}
+
+static void json_entry_separator() {
+	printf(", ");
+}
+static void json_field_assignment() {
+	printf(": ");
+}
+
+static void json_string(const char* text) {
+	//TODO - proper and safe quoting
+	printf("\"%s\"", text);
+}
+
+static void json_integer(int number) {
+	printf("%i", number);
+}
 
 static void print_flags(const struct flag_name *flag_names, unsigned int num_entries, __u32 flags)
 {
@@ -197,6 +239,13 @@ static const struct flag_name bt_flags[] = {
 	{ V4L2_DV_FL_HAS_HDMI_VIC, "has-hdmi-vic" },
 	{ V4L2_DV_FL_CAN_DETECT_REDUCED_FPS, "can-detect-reduced-fps" },
 };
+
+static const struct flag_name link_flags[] = {
+	{ MEDIA_LNK_FL_ENABLED, "ENABLED" },
+	{ MEDIA_LNK_FL_IMMUTABLE, "IMMUTABLE" },
+	{ MEDIA_LNK_FL_DYNAMIC, "DYNAMIC" },
+};
+
 
 static void v4l2_subdev_print_dv_timings(const struct v4l2_dv_timings *timings,
 					 const char *name)
@@ -367,6 +416,209 @@ static const char *media_pad_type_to_string(unsigned flag)
 	return "Unknown";
 }
 
+static void media_print_topology_json(struct media_device *media) {
+
+	unsigned int nents = media_get_entities_count(media);
+
+	json_start_dict();
+	json_string("type");
+	json_field_assignment();
+	json_string("topology");
+
+	json_entry_separator();
+	json_string("entities");
+	json_field_assignment();
+
+	json_start_list();
+	for (int entity_index = 0; entity_index < nents; entity_index++) {
+		if (entity_index) {
+			json_entry_separator();
+		}
+		const struct media_entity *entity = media_get_entity(media, entity_index);
+		const struct media_entity_desc *info = media_entity_get_info((struct media_entity *) entity);
+		const char *devname = media_entity_get_devname((struct media_entity *) entity);
+		const unsigned int type_id = media_entity_type((struct media_entity *) entity);
+		const unsigned int num_links = media_entity_get_links_count((struct media_entity *)entity);
+
+		json_start_dict();
+		json_string("type");
+		json_field_assignment();
+		json_string("entity");
+
+		json_entry_separator();
+		json_string("type_id");
+		json_field_assignment();
+		json_integer(type_id);
+
+		json_entry_separator();
+		json_string("entity_id");
+		json_field_assignment();
+		json_integer(info->id);
+
+		json_entry_separator();
+		json_string("name");
+		json_field_assignment();
+		json_string(info->name);
+
+		json_entry_separator();
+		json_string("type_name");
+		json_field_assignment();
+
+		switch (type_id) {
+			case MEDIA_ENT_T_DEVNODE:
+				json_string("MEDIA_ENT_T_DEVNODE");
+
+				if (devname) {
+					json_entry_separator();
+					json_string("device_name");
+					json_field_assignment();
+					json_string(devname);
+				}
+				break;
+
+			case MEDIA_ENT_T_V4L2_SUBDEV:
+				json_string("MEDIA_ENT_T_V4L2_SUBDEV");
+
+				json_entry_separator();
+				json_string("pads");
+				json_field_assignment();
+				json_start_list();
+
+				for (int pad_index = 0; pad_index < info->pads; pad_index++) {
+					if (pad_index) {
+						json_entry_separator();
+					}
+
+					const struct media_pad *pad = media_entity_get_pad((struct media_entity *) entity, pad_index);
+
+					//pad->flags pad->index
+					json_start_dict();
+					json_string("type");
+					json_field_assignment();
+					json_string("pad");
+
+					json_entry_separator();
+					json_string("index");
+					json_field_assignment();
+					json_integer(pad->index);
+
+					json_entry_separator();
+					json_string("pad_type");
+					json_field_assignment();
+					json_string(media_pad_type_to_string(pad->flags));
+
+					json_end_dict();
+
+
+				}
+
+				json_end_list();
+
+				break;
+
+			default:
+				json_null();
+				break;
+		}
+
+
+		json_entry_separator();
+		json_string("links");
+		json_field_assignment();
+		json_start_list();
+
+		for (int link_index = 0; link_index < num_links; link_index++) {
+			const struct media_link *link = media_entity_get_link((struct media_entity *) entity, link_index);
+			const struct media_pad *source = link->source;
+			const struct media_pad *sink = link->sink;
+
+
+			if (link_index) {
+				json_entry_separator();
+			}
+
+			json_start_dict();
+
+			json_string("source");
+			json_field_assignment();
+
+			json_start_dict();
+
+			json_string("entity");
+			json_field_assignment();
+			json_integer(media_entity_get_info(source->entity)->id);
+
+			json_entry_separator();
+			json_string("port");
+			json_field_assignment();
+			json_integer(source->index);
+
+			json_end_dict();
+
+
+			json_entry_separator();
+			json_string("sink");
+			json_field_assignment();
+
+			json_start_dict();
+
+			json_string("entity");
+			json_field_assignment();
+			json_integer(media_entity_get_info(sink->entity)->id);
+
+			json_entry_separator();
+			json_string("port");
+			json_field_assignment();
+			json_integer(sink->index);
+
+			json_end_dict();
+
+
+			json_entry_separator();
+			json_string("flags");
+			json_field_assignment();
+			json_integer(link->flags);
+
+
+			json_end_dict();
+
+		}
+		json_end_list();
+		json_end_dict();
+	}
+	json_end_list();
+
+	json_entry_separator();
+	json_string("link_flags");
+	json_field_assignment();
+
+	json_start_list();
+
+	size_t num_flags = sizeof(link_flags) / sizeof(link_flags[0]);
+	for (int flag_index = 0; flag_index < num_flags; flag_index++) {
+		const struct flag_name* flag = &link_flags[flag_index];
+		if (flag_index) {
+			json_entry_separator();
+		}
+
+		json_start_dict();
+		json_string("name");
+		json_field_assignment();
+		json_string(flag->name);
+
+		json_entry_separator();
+		json_string("value");
+		json_field_assignment();
+		json_integer(flag->flag);
+		json_end_dict();
+	}
+
+	json_end_list();
+
+	json_end_dict();
+
+}
+
 static void media_print_topology_dot(struct media_device *media)
 {
 	unsigned int nents = media_get_entities_count(media);
@@ -470,11 +722,6 @@ static void media_print_pad_text(struct media_entity *entity,
 static void media_print_topology_text_entity(struct media_device *media,
 					     struct media_entity *entity)
 {
-	static const struct flag_name link_flags[] = {
-		{ MEDIA_LNK_FL_ENABLED, "ENABLED" },
-		{ MEDIA_LNK_FL_IMMUTABLE, "IMMUTABLE" },
-		{ MEDIA_LNK_FL_DYNAMIC, "DYNAMIC" },
-	};
 	const struct media_entity_desc *info = media_entity_get_info(entity);
 	const char *devname = media_entity_get_devname(entity);
 	unsigned int num_links = media_entity_get_links_count(entity);
@@ -642,6 +889,8 @@ int main(int argc, char **argv)
 
 	if (media_opts.print_dot) {
 		media_print_topology_dot(media);
+	} else if (media_opts.print_json) {
+		media_print_topology_json(media);
 	} else if (media_opts.print) {
 		if (entity)
 			media_print_topology_text_entity(media, entity);
