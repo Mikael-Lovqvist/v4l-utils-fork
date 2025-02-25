@@ -70,6 +70,7 @@ static void usage(const char *argv0)
 	printf("-p, --print-topology	Print the device topology. If an entity\n");
 	printf("			is specified through the -e option, print\n");
 	printf("			information for that entity only.\n");
+	printf("    --print-json	Print the device topology as JSON\n");
 	printf("    --print-dot		Print the device topology as a dot graph\n");
 	printf("-r, --reset		Reset all links to inactive\n");
 	printf("-v, --verbose		Be verbose\n");
